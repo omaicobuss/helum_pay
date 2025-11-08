@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecionando para Pagamento - Helum Pay</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="redirect-container">
+        <img src="MP_RGB_HANDSHAKE_pluma_horizontal.png" alt="Logo Mercado Pago">
+        <h1>Redirecionando...</h1>
+        <p>Você escolheu pagar com Mercado Pago. Estamos preparando seu ambiente seguro de pagamento.</p>
+        <p>Você será redirecionado em <span id="countdown">5</span> segundos.</p>
+        <a id="redirect-button" href="#" class="btn-redirect" style="display: none;">Pagar Agora</a>
+    </div>
+
+    <script>
+        (async function() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const subscriptionId = urlParams.get('subscription_id');
+
+                if (!subscriptionId) {
+                    throw new Error("ID da assinatura não encontrado.");
+                }
+
+                const response = await fetch(`main.php?subscription_id=${subscriptionId}`);
+                const preference = await response.json();
+
+                if (!preference.id) {
+                    throw new Error("Falha ao criar a preferência de pagamento.");
+                }
+
+                const redirectUrl = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=${preference.id}`;
+                const redirectButton = document.getElementById('redirect-button');
+                redirectButton.href = redirectUrl;
+                redirectButton.style.display = 'inline-block';
+
+                let seconds = 5;
+                const countdownElement = document.getElementById('countdown');
+                const interval = setInterval(() => {
+                    seconds--;
+                    countdownElement.textContent = seconds;
+                    if (seconds <= 0) {
+                        clearInterval(interval);
+                        window.location.href = redirectUrl;
+                    }
+                }, 1000);
+            } catch (error) {
+                console.error("Erro:", error);
+                document.querySelector('.redirect-container p').textContent = 'Ocorreu um erro ao iniciar o pagamento. Por favor, tente novamente.';
+                document.getElementById('countdown').parentElement.style.display = 'none';
+            }
+        })();
+    </script>
+</body>
+</html>

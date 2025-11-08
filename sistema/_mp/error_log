@@ -1,0 +1,9 @@
+[06-Oct-2025 10:52:46 America/Fortaleza] PHP Warning:  Undefined array key "mode" in /home3/helumc87/public_html/helum_pay/_mp/success.php on line 24
+[06-Oct-2025 11:18:39 America/Fortaleza] PaymentProcessor->syncPaymentStatus foi chamado para o ID de pagamento: 128826647334
+[06-Oct-2025 11:23:55 America/Fortaleza] PHP Fatal error:  Uncaught TypeError: MercadoPago\Net\MPDefaultHttpClient::__construct(): Argument #1 ($httpRequest) must be of type ?MercadoPago\Net\HttpRequest, array given, called in /home3/helumc87/public_html/helum_pay/_mp/payment_processor.php on line 25 and defined in /home3/helumc87/public_html/helum_pay/_mp/vendor/mercadopago/dx-php/src/MercadoPago/Net/MPDefaultHttpClient.php:20
+Stack trace:
+#0 /home3/helumc87/public_html/helum_pay/_mp/payment_processor.php(25): MercadoPago\Net\MPDefaultHttpClient->__construct(Array)
+#1 /home3/helumc87/public_html/helum_pay/_mp/success.php(35): PaymentProcessor->__construct(Object(mysqli), Array)
+#2 {main}
+  thrown in /home3/helumc87/public_html/helum_pay/_mp/vendor/mercadopago/dx-php/src/MercadoPago/Net/MPDefaultHttpClient.php on line 20
+[06-Oct-2025 11:25:56 America/Fortaleza] PaymentProcessor General Error: Connection timeout after 5 ms
