@@ -39,6 +39,7 @@ try {
 
     // Remetente
     $mail->setFrom('financeiro@helum.com.br', 'Helum Pay');
+    $mail->addBCC('financeiro@helum.com.br');
 
     $email_sent = false;
 

@@ -110,4 +110,26 @@ function getPaymentConfirmationEmailBody($fullName, $productName, $paymentDate, 
     ';
 }
 
+function getPasswordResetEmailBody($username, $reset_link) {
+    $logo_url = 'https://helum.com.br/sistemas/helum_pay/sistema/logo.png';
+
+    return '
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <img src="' . $logo_url . '" alt="Logo Helum" style="max-width: 150px;">
+            </div>
+            <h2>Redefinição de Senha - Helum Pay</h2>
+            <p>Olá, ' . htmlspecialchars($username) . ',</p>
+            <p>Recebemos uma solicitação para redefinir sua senha. Clique no botão abaixo para criar uma nova senha. O link é válido por 1 hora.</p>
+            <p style="text-align: center; margin: 30px 0;">
+                <a href="' . $reset_link . '" style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block;">Redefinir Senha</a>
+            </p>
+            <p>Se você não solicitou esta alteração, por favor, ignore este e-mail.</p>
+            <br>
+            <p>Atenciosamente,</p>
+            <p><strong>Equipe Helum</strong></p>
+        </div>
+    ';
+}
+
 ?>

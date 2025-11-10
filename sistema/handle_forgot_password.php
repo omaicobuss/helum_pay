@@ -7,6 +7,7 @@ use PHPMailer\PHPMailer\Exception;
 
 require 'db.php';
 require '_mp/vendor/autoload.php'; // Ensure you have PHPMailer installed via Composer
+require 'email_templates.php'; // Carrega os templates de e-mail
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $email = $_POST['email'];
@@ -33,47 +34,45 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // Definir o tempo de expiração do token (ex: 1 hora)
         $expires = date("U") + 3600;
 
-        // Armazenar o token e sua expiração no banco de dados (crie uma tabela para isso)
-        // Ex: CREATE TABLE password_resets (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255), token VARCHAR(100), expires BIGINT);
+        // Armazenar o token e sua expiração no banco de dados
         $reset_stmt = $conn->prepare("INSERT INTO password_resets (email, token, expires) VALUES (?, ?, ?)");
         $reset_stmt->bind_param("sss", $email, $token, $expires);
         $reset_stmt->execute();
 
         // Criar o link de redefinição
-        $reset_link = "http://localhost/helum_pay/reset_password.php?token=" . $token;
+        $reset_link = "http://" . $_SERVER['HTTP_HOST'] . "/helum_pay/sistema/reset_password.php?token=" . $token;
 
         // Configurar e enviar o e-mail com PHPMailer
         $mail = new PHPMailer(true);
 
         try {
-            // Configurações do servidor SMTP (ex: Gmail)
+            // Configurações do servidor SMTP
             $mail->isSMTP();
-            $mail->Host = 'smtp.example.com'; // Insira seu servidor SMTP
+            $mail->Host = 'mail.helum.com.br';
             $mail->SMTPAuth = true;
-            $mail->Username = 'your_email@example.com'; // Seu e-mail
-            $mail->Password = 'your_password'; // Sua senha
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port = 587;
+            $mail->Username = 'financeiro@helum.com.br';
+            $mail->Password = 'D3f1n1t1v@';
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+            $mail->Port = 465;
+            $mail->CharSet = 'UTF-8';
 
             // Destinatários
-            $mail->setFrom('no-reply@helumpay.com', 'Helum Pay');
+            $mail->setFrom('financeiro@helum.com.br', 'Helum Pay');
             $mail->addAddress($email, $user['username']);
+            $mail->addBCC('financeiro@helum.com.br');
 
             // Conteúdo do e-mail
             $mail->isHTML(true);
             $mail->Subject = 'Redefinicao de Senha - Helum Pay';
-            $mail->Body    = "Olá, {$user['username']}.<br><br>" . 
-                             "Recebemos uma solicitação para redefinir sua senha. Clique no link abaixo para criar uma nova senha:<br>" . 
-                             "<a href='{$reset_link}'>{$reset_link}</a><br><br>" . 
-                             "Se você não solicitou isso, ignore este e-mail.<br><br>" . 
-                             "Atenciosamente,<br>Equipe Helum Pay";
-            $mail->AltBody = "Para redefinir sua senha, copie e cole este link em seu navegador: {$reset_link}";
+            $mail->Body    = getPasswordResetEmailBody($user['username'], $reset_link);
+            $mail->AltBody = "Para redefinir sua senha, copie e cole este link em seu navegador: " . $reset_link;
 
             $mail->send();
             $_SESSION['reset_message'] = 'Um e-mail com as instruções foi enviado para você.';
         } catch (Exception $e) {
             $_SESSION['reset_error'] = "Não foi possível enviar o e-mail. Mailer Error: {$mail->ErrorInfo}";
         }
+
 
     } else {
         // Para não revelar se um e-mail está ou não cadastrado, mostre sempre uma mensagem de sucesso
