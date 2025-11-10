@@ -84,6 +84,11 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
         .tab-link.active { color: #f0f6fc; border-bottom-color: #f78166; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        /* Estilos do Modal */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #161b22; margin: 15% auto; padding: 25px; border: 1px solid #30363d; width: 80%; max-width: 500px; border-radius: 8px; position: relative; }
+        .close-button { color: #8b949e; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-button:hover, .close-button:focus { color: #c9d1d9; text-decoration: none; outline: none; }
     </style>
 </head>
 <body>
@@ -103,7 +108,7 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
         <div id="users" class="tab-content active section">
             <h2>Gerenciar Usuários</h2>
             <table>
-                <thead><tr><th>ID</th><th>Usuário</th><th>Perfil</th><th>Ação</th></tr></thead>
+                <thead><tr><th>ID</th><th>Usuário</th><th>Perfil</th><th>Ações</th></tr></thead>
                 <tbody>
                     <?php foreach($users as $user): ?>
                     <tr>
@@ -112,12 +117,35 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
                             <td><?php echo htmlspecialchars($user['username']); ?></td>
                             <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
                             <td><select name="role"><option value="cliente" <?php echo ($user['role'] == 'cliente') ? 'selected' : ''; ?>>Cliente</option><option value="admin" <?php echo ($user['role'] == 'admin') ? 'selected' : ''; ?>>Admin</option></select></td>
-                            <td><button type="submit" class="btn-save">Salvar</button></td>
+                            <td>
+                                <button type="submit" class="btn-save">Salvar</button>
+                                <button type="button" class="btn-notify" onclick="openEmailModal('<?php echo $user['id']; ?>')">Enviar E-mail</button>
+                            </td>
                         </form>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Modal de Envio de E-mail -->
+        <div id="emailModal" class="modal">
+            <div class="modal-content">
+                <span class="close-button" onclick="closeEmailModal()">&times;</span>
+                <h3>Enviar E-mail para Usuário</h3>
+                <form action="handle_email.php" method="GET">
+                    <input type="hidden" name="action" value="send_custom">
+                    <input type="hidden" id="modalUserId" name="id" value="">
+                    <div class="form-group">
+                        <label for="template">Modelo de E-mail:</label>
+                        <select id="template" name="template" class="form-control" required>
+                            <option value="new_system_welcome">Boas-vindas ao Novo Sistema</option>
+                            <!-- Outros templates podem ser adicionados aqui -->
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-save">Enviar</button>
+                </form>
+            </div>
         </div>
 
         <!-- Aba de Produtos -->
@@ -161,7 +189,7 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
                         <td><?php echo htmlspecialchars($sub['status']); ?></td>
                         <td style="white-space: pre-wrap;"><?php echo htmlspecialchars($sub['notes']); ?></td>
                         <td>
-                            <a href="handle_email.php?action=notify_due&id=<?php echo $sub['id']; ?>" class="btn-notify">Notificar Vencimento</a>
+                            <button type="button" class="btn-notify" onclick="openSubscriptionEmailModal('<?php echo $sub['id']; ?>')">Notificar</button>
                             <a href="subscription_edit.php?id=<?php echo $sub['id']; ?>" class="btn-edit">Editar</a> 
                             <a href="handle_subscription.php?action=delete&id=<?php echo $sub['id']; ?>" class="btn-delete" onclick="return confirmDelete();">Excluir</a></td>
                     </tr>
@@ -184,6 +212,26 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
                 </div>
                 <button type="submit" class="btn btn-save">Adicionar Assinatura</button>
             </form>
+        </div>
+
+        <!-- Modal de E-mail de Assinatura -->
+        <div id="subscriptionEmailModal" class="modal">
+            <div class="modal-content">
+                <span class="close-button" onclick="closeSubscriptionEmailModal()">&times;</span>
+                <h3>Notificar Assinatura</h3>
+                <form action="handle_email.php" method="GET">
+                    <input type="hidden" name="action" value="notify_subscription">
+                    <input type="hidden" id="modalSubscriptionId" name="id" value="">
+                    <div class="form-group">
+                        <label for="sub_template">Modelo de E-mail:</label>
+                        <select id="sub_template" name="template" class="form-control" required>
+                            <option value="invoice_available">Fatura Disponível</option>
+                            <option value="invoice_due">Lembrete de Vencimento</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-save">Enviar Notificação</button>
+                </form>
+            </div>
         </div>
 
         <!-- Aba de Pagamentos -->
@@ -219,7 +267,7 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
                                     <option value="initiated">Iniciado</option><option value="pending">Pendente</option><option value="approved">Aprovado</option><option value="rejected">Rejeitado</option><option value="cancelled">Cancelado</option><option value="refunded">Devolvido</option></select>
                                 <button type="submit" class="btn-save">Salvar</button>
                                 <?php if ($payment['status'] === 'approved'): ?>
-                                    <a href="handle_email.php?action=confirm_payment&id=<?php echo $payment['id']; ?>" class="btn-notify" style="margin-left: 10px;">Confirmar Pagamento</a>
+                                    <button type="button" class="btn-notify" style="margin-left: 10px;" onclick="openPaymentEmailModal('<?php echo $payment['id']; ?>')">Confirmar Pagamento</button>
                                 <?php endif; ?>
                             </td>
                         </form>
@@ -227,6 +275,25 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
                     <?php endforeach; ?>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Modal de E-mail de Pagamento -->
+        <div id="paymentEmailModal" class="modal">
+            <div class="modal-content">
+                <span class="close-button" onclick="closePaymentEmailModal()">&times;</span>
+                <h3>Confirmar Pagamento</h3>
+                <form action="handle_email.php" method="GET">
+                    <input type="hidden" name="action" value="confirm_payment">
+                    <input type="hidden" id="modalPaymentId" name="id" value="">
+                    <div class="form-group">
+                        <label for="payment_template">Modelo de E-mail:</label>
+                        <select id="payment_template" name="template" class="form-control" required>
+                            <option value="payment_confirmation">Confirmação de Pagamento</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-save">Enviar Confirmação</button>
+                </form>
+            </div>
         </div>
 
         <!-- Aba de Logs de Webhook -->
@@ -306,6 +373,43 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
             element.style.display = (element.style.display === 'block') ? 'none' : 'block';
         }
         function confirmDelete() { return confirm('Você tem certeza que deseja excluir este item?'); }
+
+        // Funções do Modal de E-mail de Usuário
+        const emailModal = document.getElementById('emailModal');
+        function openEmailModal(userId) {
+            document.getElementById('modalUserId').value = userId;
+            emailModal.style.display = 'block';
+        }
+        function closeEmailModal() {
+            emailModal.style.display = 'none';
+        }
+
+        // Funções do Modal de E-mail de Assinatura
+        const subscriptionEmailModal = document.getElementById('subscriptionEmailModal');
+        function openSubscriptionEmailModal(subscriptionId) {
+            document.getElementById('modalSubscriptionId').value = subscriptionId;
+            subscriptionEmailModal.style.display = 'block';
+        }
+        function closeSubscriptionEmailModal() {
+            subscriptionEmailModal.style.display = 'none';
+        }
+
+        // Funções do Modal de E-mail de Pagamento
+        const paymentEmailModal = document.getElementById('paymentEmailModal');
+        function openPaymentEmailModal(paymentId) {
+            document.getElementById('modalPaymentId').value = paymentId;
+            paymentEmailModal.style.display = 'block';
+        }
+        function closePaymentEmailModal() {
+            paymentEmailModal.style.display = 'none';
+        }
+
+        // Fechar modais ao clicar fora
+        window.onclick = function(event) {
+            if (event.target == emailModal) closeEmailModal();
+            if (event.target == subscriptionEmailModal) closeSubscriptionEmailModal();
+            if (event.target == paymentEmailModal) closePaymentEmailModal();
+        }
     </script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 <?php
+ob_start(); // Inicia o buffer de saída
 session_start();
 require 'db.php';
 

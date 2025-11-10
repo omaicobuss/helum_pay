@@ -54,47 +54,73 @@ $payments_result = $stmt_pays->get_result();
 
         <div class="section">
             <h2>Meus Produtos e Serviços</h2>
-            <div style="overflow-x: auto;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Produto/Serviço</th>
-                            <th>Próximo Vencimento</th>
-                            <th>Status</th>
-                            <th>Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if ($subscriptions_result->num_rows > 0): ?>
-                            <?php while($row = $subscriptions_result->fetch_assoc()): ?>
-                                <?php
+            <form action="invoice.php" method="POST" id="payment-form">
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="select-all"></th>
+                                <th>Produto/Serviço</th>
+                                <th>Próximo Vencimento</th>
+                                <th>Status</th>
+                                <th>Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            // Re-executar a query para ter os dados de preço
+                            $stmt_subs->execute();
+                            $subscriptions_result = $stmt_subs->get_result();
+                            if ($subscriptions_result->num_rows > 0): 
+                                // Adicionar a busca do preço na query
+                                $subscriptions_sql_price = "
+                                    SELECT s.id, s.next_due_date, s.status, s.notes, p.name as product_name, p.price
+                                    FROM subscriptions s
+                                    JOIN products p ON s.product_id = p.id
+                                    WHERE s.user_id = ?
+                                    ORDER BY s.next_due_date ASC";
+                                $stmt_subs_price = $conn->prepare($subscriptions_sql_price);
+                                $stmt_subs_price->bind_param("i", $user_id);
+                                $stmt_subs_price->execute();
+                                $subscriptions_result_price = $stmt_subs_price->get_result();
+
+                                while($row = $subscriptions_result_price->fetch_assoc()):
                                     $isPayable = in_array($row['status'], ['active', 'pending']);
                                     $status_class = 'status-' . strtolower(htmlspecialchars($row['status']));
-                                ?>
+                            ?>
+                                    <tr>
+                                        <td>
+                                            <?php if ($isPayable): ?>
+                                                <input type="checkbox" class="subscription-checkbox" name="subscription_ids[]" value="<?php echo $row['id']; ?>" data-price="<?php echo $row['price']; ?>">
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <strong><?php echo htmlspecialchars($row['product_name']); ?></strong>
+                                            <?php if (!empty($row['notes'])): ?>
+                                                <span class="notes"><?php echo htmlspecialchars($row['notes']); ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?php echo date("d/m/Y", strtotime($row['next_due_date'])); ?></td>
+                                        <td><span class="status-badge <?php echo $status_class; ?>"><?php echo ucfirst(htmlspecialchars($row['status'])); ?></span></td>
+                                        <td>R$ <?php echo number_format($row['price'], 2, ',', '.'); ?></td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?>
                                 <tr>
-                                    <td>
-                                        <strong><?php echo htmlspecialchars($row['product_name']); ?></strong>
-                                        <?php if (!empty($row['notes'])): ?>
-                                            <span class="notes"><?php echo htmlspecialchars($row['notes']); ?></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?php echo date("d/m/Y", strtotime($row['next_due_date'])); ?></td>
-                                    <td><span class="status-badge <?php echo $status_class; ?>"><?php echo ucfirst(htmlspecialchars($row['status'])); ?></span></td>
-                                    <td>
-                                        <?php if ($isPayable): ?>
-                                            <a href="invoice.php?id=<?php echo $row['id']; ?>" class="btn-pay">Pagar Agora</a>
-                                        <?php endif; ?>
-                                    </td>
+                                    <td colspan="5" style="text-align: center;">Nenhum produto ou serviço encontrado.</td>
                                 </tr>
-                            <?php endwhile; ?>
-                        <?php else: ?>
-                            <tr>
-                                <td colspan="4" style="text-align: center;">Nenhum produto ou serviço encontrado.</td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="payment-summary">
+                    <div class="total-selected">
+                        <strong>Total Selecionado:</strong>
+                        <span id="total-amount">R$ 0,00</span>
+                    </div>
+                    <button type="submit" id="pay-selected-btn" class="btn-pay" disabled>Pagar Selecionados</button>
+                </div>
+            </form>
         </div>
 
         <div class="accordion">
@@ -154,15 +180,61 @@ $payments_result = $stmt_pays->get_result();
         </div>
     </div>
     <script>
-        document.querySelectorAll('.accordion-header').forEach(header => {
-            header.addEventListener('click', () => {
-                const content = header.nextElementSibling;
-                header.classList.toggle('active');
-                if (content.style.display === 'block') {
-                    content.style.display = 'none';
-                } else {
-                    content.style.display = 'block';
+        document.addEventListener('DOMContentLoaded', function() {
+            const selectAllCheckbox = document.getElementById('select-all');
+            const subscriptionCheckboxes = document.querySelectorAll('.subscription-checkbox');
+            const totalAmountSpan = document.getElementById('total-amount');
+            const paySelectedBtn = document.getElementById('pay-selected-btn');
+            const paymentForm = document.getElementById('payment-form');
+
+            function updateSelection() {
+                let total = 0;
+                let selectedCount = 0;
+                subscriptionCheckboxes.forEach(checkbox => {
+                    if (checkbox.checked) {
+                        total += parseFloat(checkbox.dataset.price);
+                        selectedCount++;
+                    }
+                });
+
+                totalAmountSpan.textContent = 'R$ ' + total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                paySelectedBtn.disabled = selectedCount === 0;
+            }
+
+            selectAllCheckbox.addEventListener('change', function() {
+                subscriptionCheckboxes.forEach(checkbox => {
+                    checkbox.checked = selectAllCheckbox.checked;
+                });
+                updateSelection();
+            });
+
+            subscriptionCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    if (!checkbox.checked) {
+                        selectAllCheckbox.checked = false;
+                    } else {
+                        const allChecked = Array.from(subscriptionCheckboxes).every(c => c.checked);
+                        selectAllCheckbox.checked = allChecked;
+                    }
+                    updateSelection();
+                });
+            });
+
+            paymentForm.addEventListener('submit', function(e) {
+                const selectedCount = Array.from(subscriptionCheckboxes).filter(c => c.checked).length;
+                if (selectedCount === 0) {
+                    e.preventDefault();
+                    alert('Por favor, selecione ao menos uma fatura para pagar.');
                 }
+            });
+
+            // Accordion logic
+            document.querySelectorAll('.accordion-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    header.classList.toggle('active');
+                    content.style.display = content.style.display === 'block' ? 'none' : 'block';
+                });
             });
         });
     </script>

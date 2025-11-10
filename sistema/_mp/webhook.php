@@ -126,22 +126,59 @@ class WebhookHandler
      */
     private function handleApprovedPayment(object $payment): void
     {
-        $subscriptionId = (int)$payment->external_reference;
+        $externalReference = $payment->external_reference;
         
         $this->conn->begin_transaction();
         try {
-            $stmtPayment = $this->conn->prepare(
-                "INSERT INTO payments (subscription_id, payment_date, amount, status, mp_payment_id) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), payment_date = VALUES(payment_date), amount = VALUES(amount)"
-            );
-            $paymentDate = date("Y-m-d H:i:s");
-            $stmtPayment->bind_param("isdsi", $subscriptionId, $paymentDate, $payment->transaction_amount, $payment->status, $payment->id);
-            $stmtPayment->execute();
-            $stmtPayment->close();
+            // Verifica se é um pagamento de múltiplas faturas
+            if (strpos($externalReference, ',') !== false) {
+                $subscriptionIds = explode(',', $externalReference);
 
-            $stmtSub = $this->conn->prepare("UPDATE subscriptions SET next_due_date = DATE_ADD(next_due_date, INTERVAL 1 MONTH), status = 'paid' WHERE id = ?");
-            $stmtSub->bind_param("i", $subscriptionId);
-            $stmtSub->execute();
-            $stmtSub->close();
+                foreach ($subscriptionIds as $subscriptionId) {
+                    $subId = (int)$subscriptionId;
+                    if ($subId === 0) continue;
+
+                    // 1. Busca o preço individual do produto para esta assinatura
+                    $price_sql = "SELECT p.price FROM products p JOIN subscriptions s ON p.id = s.product_id WHERE s.id = ?";
+                    $stmt_price = $this->conn->prepare($price_sql);
+                    $stmt_price->bind_param("i", $subId);
+                    $stmt_price->execute();
+                    $price_result = $stmt_price->get_result()->fetch_assoc();
+                    $individual_price = $price_result['price'] ?? 0;
+                    $stmt_price->close();
+
+                    // 2. Insere/Atualiza o registro de pagamento individual
+                    $stmtPayment = $this->conn->prepare(
+                        "INSERT INTO payments (subscription_id, payment_date, amount, status, mp_payment_id) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), payment_date = VALUES(payment_date), amount = VALUES(amount)"
+                    );
+                    $paymentDate = date("Y-m-d H:i:s", strtotime($payment->date_approved));
+                    $stmtPayment->bind_param("isdsi", $subId, $paymentDate, $individual_price, $payment->status, $payment->id);
+                    $stmtPayment->execute();
+                    $stmtPayment->close();
+
+                    // 3. Atualiza a assinatura
+                    $stmtSub = $this->conn->prepare("UPDATE subscriptions SET next_due_date = DATE_ADD(next_due_date, INTERVAL 1 MONTH), status = 'paid' WHERE id = ?");
+                    $stmtSub->bind_param("i", $subId);
+                    $stmtSub->execute();
+                    $stmtSub->close();
+                }
+            } else {
+                // Lógica original para pagamento único
+                $subscriptionId = (int)$externalReference;
+                
+                $stmtPayment = $this->conn->prepare(
+                    "INSERT INTO payments (subscription_id, payment_date, amount, status, mp_payment_id) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), payment_date = VALUES(payment_date), amount = VALUES(amount)"
+                );
+                $paymentDate = date("Y-m-d H:i:s", strtotime($payment->date_approved));
+                $stmtPayment->bind_param("isdsi", $subscriptionId, $paymentDate, $payment->transaction_amount, $payment->status, $payment->id);
+                $stmtPayment->execute();
+                $stmtPayment->close();
+
+                $stmtSub = $this->conn->prepare("UPDATE subscriptions SET next_due_date = DATE_ADD(next_due_date, INTERVAL 1 MONTH), status = 'paid' WHERE id = ?");
+                $stmtSub->bind_param("i", $subscriptionId);
+                $stmtSub->execute();
+                $stmtSub->close();
+            }
 
             $this->conn->commit();
         } catch (Exception $e) {

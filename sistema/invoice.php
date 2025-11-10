@@ -9,42 +9,74 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'cliente') {
 }
 
 $user_id = $_SESSION['user_id'];
-$subscription_id = $_GET['id'] ?? 0;
+$invoice_items = [];
+$total_amount = 0;
+$user_info = null;
+$subscription_ids_for_form = [];
 
-if (!$subscription_id) {
+// Lógica para Múltiplas Faturas (via POST)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['subscription_ids']) && is_array($_POST['subscription_ids'])) {
+    $subscription_ids = array_map('intval', $_POST['subscription_ids']);
+    if (empty($subscription_ids)) {
+        header("Location: dashboard_cliente.php");
+        exit();
+    }
+    $placeholders = implode(',', array_fill(0, count($subscription_ids), '?'));
+    
+    $sql = "
+        SELECT s.id, s.next_due_date, p.name as product_name, p.price, u.full_name, u.cpf
+        FROM subscriptions s
+        JOIN products p ON s.product_id = p.id
+        JOIN users u ON s.user_id = u.id
+        WHERE s.user_id = ? AND s.id IN ($placeholders)
+    ";
+    $types = 'i' . str_repeat('i', count($subscription_ids));
+    $params = array_merge([$user_id], $subscription_ids);
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param($types, ...$params);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    while ($row = $result->fetch_assoc()) {
+        $invoice_items[] = $row;
+        $total_amount += (float)$row['price'];
+        if (!$user_info) {
+            $user_info = ['name' => $row['full_name'], 'cpf' => $row['cpf']];
+        }
+    }
+    $subscription_ids_for_form = $subscription_ids;
+    $stmt->close();
+
+// Lógica para Fatura Única (via GET)
+} elseif (isset($_GET['id'])) {
+    $subscription_id = (int)$_GET['id'];
+    $sql = "
+        SELECT s.id, s.next_due_date, p.name as product_name, p.price, u.full_name, u.cpf
+        FROM subscriptions s
+        JOIN products p ON s.product_id = p.id
+        JOIN users u ON s.user_id = u.id
+        WHERE s.id = ? AND s.user_id = ?
+    ";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ii", $subscription_id, $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($row = $result->fetch_assoc()) {
+        $invoice_items[] = $row;
+        $total_amount = (float)$row['price'];
+        $user_info = ['name' => $row['full_name'], 'cpf' => $row['cpf']];
+        $subscription_ids_for_form[] = $subscription_id;
+    }
+    $stmt->close();
+}
+
+// Se nenhum item foi encontrado, redireciona
+if (empty($invoice_items)) {
     header("Location: dashboard_cliente.php");
     exit();
 }
 
-// Buscar dados da fatura, garantindo que pertence ao usuário logado
-$sql = "
-    SELECT 
-        s.id as subscription_id, 
-        s.next_due_date, 
-        p.name as product_name, 
-        p.description as product_description,
-        p.price as product_price,
-        u.full_name as user_name,
-        u.cpf as user_cpf
-    FROM subscriptions s
-    JOIN products p ON s.product_id = p.id
-    JOIN users u ON s.user_id = u.id
-    WHERE s.id = ? AND s.user_id = ?
-";
-
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("ii", $subscription_id, $user_id);
-$stmt->execute();
-$result = $stmt->get_result();
-
-if ($result->num_rows === 0) {
-    // Se não encontrou a fatura ou ela não pertence ao usuário, redireciona.
-    header("Location: dashboard_cliente.php");
-    exit();
-}
-
-$invoice = $result->fetch_assoc();
-$stmt->close();
 $conn->close();
 ?>
 <!DOCTYPE html>
@@ -52,10 +84,10 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fatura - Helum Pay</title>
+    <title>Revisão da Fatura - Helum Pay</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="dashboard"> <!-- Usa a classe dashboard para o fundo correto e espaçamento -->
+<body class="dashboard">
     <div class="invoice-box">
         <table cellpadding="0" cellspacing="0">
             <tr class="top">
@@ -64,8 +96,8 @@ $conn->close();
                         <tr>
                             <td>
                                 <h1>HELUM PAY</h1>
-                                Fatura #: <?php echo $invoice['subscription_id']; ?><br>
-                                Vencimento: <?php echo date("d/m/Y", strtotime($invoice['next_due_date'])); ?>
+                                Fatura #: <?php echo implode(', ', $subscription_ids_for_form); ?><br>
+                                Data de Pagamento: <?php echo date("d/m/Y"); ?>
                             </td>
                         </tr>
                     </table>
@@ -74,21 +106,30 @@ $conn->close();
             <tr class="information">
                 <td colspan="2">
                     <table>
-                        <tr><td><strong>Cobrança para:</strong><br><?php echo htmlspecialchars($invoice['user_name']); ?><br>CPF: <?php echo htmlspecialchars($invoice['user_cpf']); ?></td></tr>
+                        <tr><td><strong>Cobrança para:</strong><br><?php echo htmlspecialchars($user_info['name']); ?><br>CPF: <?php echo htmlspecialchars($user_info['cpf']); ?></td></tr>
                     </table>
                 </td>
             </tr>
             <tr class="heading"><td>Item</td><td>Preço</td></tr>
-            <tr class="item"><td><?php echo htmlspecialchars($invoice['product_name']); ?></td><td>R$ <?php echo number_format($invoice['product_price'], 2, ',', '.'); ?></td></tr>
-            <tr class="total"><td></td><td><strong>Total: R$ <?php echo number_format($invoice['product_price'], 2, ',', '.'); ?></strong></td></tr>
+            <?php foreach ($invoice_items as $item): ?>
+                <tr class="item">
+                    <td><?php echo htmlspecialchars($item['product_name']); ?> (Ref: #<?php echo $item['id']; ?>)</td>
+                    <td>R$ <?php echo number_format($item['price'], 2, ',', '.'); ?></td>
+                </tr>
+            <?php endforeach; ?>
+            <tr class="total"><td></td><td><strong>Total: R$ <?php echo number_format($total_amount, 2, ',', '.'); ?></strong></td></tr>
         </table>
+        
         <div class="payment-options-container">
-            <h3>Escolha o meio de pagamento:</h3>
-            
-            <!-- Mercado Pago (Ativo) -->
-            <a href="_mp/index.html?subscription_id=<?php echo $invoice['subscription_id']; ?>" class="payment-option active">
-                <span>Mercado Pago</span>
-            </a>
+            <h3>Confirmar e pagar com:</h3>
+            <form action="create_multi_payment.php" method="POST" style="text-align: center; margin-bottom: 10px;">
+                <?php foreach ($subscription_ids_for_form as $id): ?>
+                    <input type="hidden" name="subscription_ids[]" value="<?php echo $id; ?>">
+                <?php endforeach; ?>
+                <button type="submit" class="payment-option active" style="border:none; width: auto; display: inline-block; cursor: pointer;">
+                    <span>Pagar com Mercado Pago</span>
+                </button>
+            </form>
 
             <!-- Outros Gateways (Inativos) -->
             <div class="payment-option disabled">

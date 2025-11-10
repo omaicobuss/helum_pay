@@ -6,6 +6,7 @@ use PHPMailer\PHPMailer\Exception;
 
 require 'db.php';
 require '_mp/vendor/autoload.php'; // PHPMailer autoloader
+require 'email_templates.php'; // Carrega os templates de e-mail
 
 // Proteção: Apenas administradores
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
@@ -15,6 +16,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 
 $action = $_GET['action'] ?? '';
 $id = $_GET['id'] ?? 0;
+$template = $_GET['template'] ?? '';
 
 if (!$id) {
     $_SESSION['feedback'] = "Erro: ID não fornecido.";
@@ -26,12 +28,11 @@ $mail = new PHPMailer(true);
 
 try {
     // --- CONFIGURAÇÃO DO SERVIDOR DE E-MAIL (SMTP) ---
-    // IMPORTANTE: Substitua com suas credenciais de e-mail reais.
     $mail->isSMTP();
-    $mail->Host = 'mail.helum.com.br'; // Insira seu servidor SMTP
+    $mail->Host = 'mail.helum.com.br';
     $mail->SMTPAuth = true;
-    $mail->Username = 'financeiro@helum.com.br'; // Seu e-mail
-    $mail->Password = 'D3f1n1t1v@'; // Sua senha
+    $mail->Username = 'financeiro@helum.com.br';
+    $mail->Password = 'D3f1n1t1v@';
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
     $mail->Port = 465;
     $mail->CharSet = 'UTF-8';
@@ -41,9 +42,8 @@ try {
 
     $email_sent = false;
 
-    if ($action === 'notify_due') {
-        // Buscar dados da assinatura
-        $sql = "SELECT u.email, u.username, p.name as product_name, s.next_due_date 
+    if ($action === 'notify_subscription') {
+        $sql = "SELECT u.email, u.full_name, p.name as product_name, s.next_due_date 
                 FROM subscriptions s 
                 JOIN users u ON s.user_id = u.id 
                 JOIN products p ON s.product_id = p.id 
@@ -54,23 +54,29 @@ try {
         $result = $stmt->get_result()->fetch_assoc();
 
         if ($result) {
-            $mail->addAddress($result['email'], $result['username']);
+            $mail->addAddress($result['email'], $result['full_name']);
             $mail->isHTML(true);
-            $mail->Subject = 'Lembrete de Vencimento - Helum Pay';
-            $due_date = date('d/m/Y', strtotime($result['next_due_date']));
-            $mail->Body    = "Olá, {$result['username']}.<br><br>" .
-                             "Este é um lembrete de que sua assinatura do produto <strong>{$result['product_name']}</strong> está com o vencimento próximo ou vencida.<br>" .
-                             "Data de Vencimento: <strong>{$due_date}</strong><br><br>" .
-                             "Por favor, acesse seu painel para efetuar o pagamento e manter seu serviço ativo.<br><br>" .
-                             "Atenciosamente,<br>Equipe Helum Pay";
+
+            if ($template === 'invoice_available') {
+                $mail->Subject = 'Fatura Disponível - Helum Pay';
+                $mail->Body    = getInvoiceAvailableEmailBody($result['full_name'], $result['product_name']);
+            } elseif ($template === 'invoice_due') {
+                $mail->Subject = 'Lembrete de Vencimento - Helum Pay';
+                $due_date = date('d/m/Y', strtotime($result['next_due_date']));
+                $mail->Body    = getInvoiceDueEmailBody($result['full_name'], $result['product_name'], $due_date);
+            } else {
+                $_SESSION['feedback'] = "Erro: Template de notificação inválido.";
+                header("Location: dashboard_admin.php");
+                exit();
+            }
+            
             $mail->send();
             $email_sent = true;
-            $_SESSION['feedback'] = "E-mail de lembrete de vencimento enviado para {$result['email']}.";
+            $_SESSION['feedback'] = "E-mail de notificação enviado para {$result['email']}.";
         }
 
     } elseif ($action === 'confirm_payment') {
-        // Buscar dados do pagamento
-        $sql = "SELECT u.email, u.username, p.name as product_name, pay.payment_date, pay.amount 
+        $sql = "SELECT u.email, u.full_name, p.name as product_name, pay.payment_date, pay.amount 
                 FROM payments pay
                 JOIN subscriptions s ON pay.subscription_id = s.id
                 JOIN users u ON s.user_id = u.id 
@@ -81,27 +87,39 @@ try {
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
 
-        if ($result) {
-            $mail->addAddress($result['email'], $result['username']);
+        if ($result && $template === 'payment_confirmation') {
+            $mail->addAddress($result['email'], $result['full_name']);
             $mail->isHTML(true);
             $mail->Subject = 'Confirmação de Pagamento - Helum Pay';
             $payment_date = date('d/m/Y', strtotime($result['payment_date']));
             $amount = number_format($result['amount'], 2, ',', '.');
-            $mail->Body    = "Olá, {$result['username']}.<br><br>" .
-                             "Seu pagamento para o produto <strong>{$result['product_name']}</strong> foi confirmado com sucesso!<br><br>" .
-                             "<strong>Detalhes do Pagamento:</strong><br>" .
-                             "Data: {$payment_date}<br>" .
-                             "Valor: R$ {$amount}<br><br>" .
-                             "Agradecemos a sua preferência.<br><br>" .
-                             "Atenciosamente,<br>Equipe Helum Pay";
+            $mail->Body    = getPaymentConfirmationEmailBody($result['full_name'], $result['product_name'], $payment_date, $amount);
+            
             $mail->send();
             $email_sent = true;
             $_SESSION['feedback'] = "E-mail de confirmação de pagamento enviado para {$result['email']}.";
         }
+    } elseif ($action === 'send_custom') {
+        // ... (código existente para e-mails de usuário)
+        $stmt = $conn->prepare("SELECT email, username, full_name FROM users WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+
+        if ($user && $template === 'new_system_welcome') {
+            $mail->addAddress($user['email'], $user['full_name']);
+            $mail->isHTML(true);
+            $mail->Subject = 'Bem-vindo ao Novo Sistema Helum!';
+            $mail->Body    = getNewSystemEmailBody($user['full_name'], $user['username'], $user['email']);
+            
+            $mail->send();
+            $email_sent = true;
+            $_SESSION['feedback'] = "E-mail enviado com sucesso para {$user['email']}.";
+        }
     }
 
     if (!$email_sent) {
-        $_SESSION['feedback'] = "Erro: Não foi possível encontrar os dados para enviar o e-mail.";
+        $_SESSION['feedback'] = "Erro: Não foi possível encontrar os dados ou o template para enviar o e-mail.";
     }
 
 } catch (Exception $e) {
