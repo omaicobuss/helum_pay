@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 
 // Import PHPMailer classes into the global namespace
@@ -35,12 +36,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $expires = date("U") + 3600;
 
         // Armazenar o token e sua expiração no banco de dados
-        $reset_stmt = $conn->prepare("INSERT INTO password_resets (email, token, expires) VALUES (?, ?, ?)");
-        $reset_stmt->bind_param("sss", $email, $token, $expires);
-        $reset_stmt->execute();
+        try {
+            $reset_stmt = $conn->prepare("INSERT INTO password_resets (email, token, expires) VALUES (?, ?, ?)");
+            if (!$reset_stmt) {
+                throw new Exception("Falha na preparação da consulta: " . $conn->error);
+            }
+            $reset_stmt->bind_param("sss", $email, $token, $expires);
+            if (!$reset_stmt->execute()) {
+                throw new Exception("Falha ao salvar o token de redefinição: " . $reset_stmt->error);
+            }
+        } catch (Exception $e) {
+            error_log($e->getMessage());
+            $_SESSION['reset_error'] = "Ocorreu um erro interno no servidor. Por favor, tente novamente mais tarde.";
+            header("Location: forgot_password.php");
+            exit();
+        }
 
         // Criar o link de redefinição
-        $reset_link = "http://" . $_SERVER['HTTP_HOST'] . "/helum_pay/sistema/reset_password.php?token=" . $token;
+        $reset_link = "http://" . $_SERVER['HTTP_HOST'] . "/sistemas/helum_pay/sistema/reset_password.php?token=" . $token;
 
         // Configurar e enviar o e-mail com PHPMailer
         $mail = new PHPMailer(true);
@@ -75,10 +88,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 
     } else {
-        // Para não revelar se um e-mail está ou não cadastrado, mostre sempre uma mensagem de sucesso
-        $_SESSION['reset_message'] = 'Se o e-mail estiver em nosso sistema, um link de recuperação será enviado.';
+        $_SESSION['reset_error'] = 'O e-mail informado não está cadastrado em nosso sistema.';
     }
 
+    session_write_close();
     header("Location: forgot_password.php");
     exit();
 

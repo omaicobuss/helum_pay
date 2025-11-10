@@ -1,5 +1,5 @@
-
 <?php
+ob_start();
 session_start();
 require 'db.php';
 
@@ -42,24 +42,38 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_SESSION['reset_token'])) {
         // Hash da nova senha
         $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
-        // Atualizar a senha do usuário no banco de dados
-        $update_stmt = $conn->prepare("UPDATE users SET password = ? WHERE email = ?");
-        $update_stmt->bind_param("ss", $password_hash, $_SESSION['reset_email']);
-        
-        if ($update_stmt->execute()) {
+        // Iniciar uma transação para garantir a atomicidade
+        $conn->begin_transaction();
+
+        try {
+            // Atualizar a senha do usuário no banco de dados
+            $update_stmt = $conn->prepare("UPDATE users SET password = ? WHERE email = ?");
+            if (!$update_stmt) throw new Exception("Erro ao preparar a atualização de senha.");
+            $update_stmt->bind_param("ss", $password_hash, $_SESSION['reset_email']);
+            if (!$update_stmt->execute()) throw new Exception("Erro ao executar a atualização de senha.");
+            $update_stmt->close();
+
             // Deletar o token de redefinição para que não seja usado novamente
             $delete_stmt = $conn->prepare("DELETE FROM password_resets WHERE email = ?");
+            if (!$delete_stmt) throw new Exception("Erro ao preparar a exclusão do token.");
             $delete_stmt->bind_param("s", $_SESSION['reset_email']);
-            $delete_stmt->execute();
+            if (!$delete_stmt->execute()) throw new Exception("Erro ao executar a exclusão do token.");
+            $delete_stmt->close();
+
+            // Se tudo deu certo, comitar a transação
+            $conn->commit();
 
             // Limpar a sessão e redirecionar para o login com mensagem de sucesso
-            unset($_SESSION['reset_token']);
-            unset($_SESSION['reset_email']);
+            unset($_SESSION['reset_token'], $_SESSION['reset_email']);
             $_SESSION['login_message'] = "Sua senha foi redefinida com sucesso! Faça o login.";
             header("Location: index.php");
             exit();
-        } else {
-            $error_message = "Ocorreu um erro ao atualizar sua senha.";
+
+        } catch (Exception $e) {
+            // Se algo deu errado, reverter a transação
+            $conn->rollback();
+            error_log("Erro na transação de redefinição de senha: " . $e->getMessage());
+            $error_message = "Ocorreu um erro crítico ao atualizar sua senha. Por favor, tente novamente.";
         }
     }
 }
