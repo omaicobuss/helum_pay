@@ -24,17 +24,34 @@ session_start();
 
         <form action="handle_register.php" method="POST">
             <div class="input-group">
-                <label for="full_name">Nome Completo</label>
-                <input type="text" id="full_name" name="full_name" required>
+                <label>Tipo de Pessoa</label>
+                <div style="display: flex; gap: 20px;">
+                    <label for="user_type_fisica" style="display: flex; align-items: center; gap: 5px;"><input type="radio" id="user_type_fisica" name="user_type" value="fisica" checked onchange="toggleFields()"> Pessoa Física</label>
+                    <label for="user_type_juridica" style="display: flex; align-items: center; gap: 5px;"><input type="radio" id="user_type_juridica" name="user_type" value="juridica" onchange="toggleFields()"> Pessoa Jurídica</label>
+                </div>
+            </div>
+
+            <div id="juridica_fields" style="display: none;">
+                <div class="input-group">
+                    <label for="company_name">Razão Social</label>
+                    <input type="text" id="company_name" name="company_name">
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label id="name_label" for="name">Nome Completo</label>
+                <input type="text" id="name" name="full_name" required>
             </div>
             <div class="input-group">
                 <label for="email">E-mail</label>
                 <input type="email" id="email" name="email" required>
             </div>
+            
             <div class="input-group">
-                <label for="cpf">CPF</label>
-                <input type="text" id="cpf" name="cpf" required>
+                <label id="document_label" for="document">CPF</label>
+                <input type="text" id="document" name="document" required>
             </div>
+
             <div class="input-group">
                 <label for="username">Usuário</label>
                 <input type="text" id="username" name="username" required>
@@ -47,5 +64,33 @@ session_start();
         </form>
         <p style="margin-top: 20px;">Já tem uma conta? <a href="index.php" style="color: #1e90ff;">Faça login</a></p>
     </div>
+
+    <script>
+        function toggleFields() {
+            const userType = document.querySelector('input[name="user_type"]:checked').value;
+            const juridicaFields = document.getElementById('juridica_fields');
+            const nameLabel = document.getElementById('name_label');
+            const documentLabel = document.getElementById('document_label');
+            const companyNameInput = document.getElementById('company_name');
+            const documentInput = document.getElementById('document');
+
+            if (userType === 'juridica') {
+                juridicaFields.style.display = 'block';
+                nameLabel.textContent = 'Nome do Responsável';
+                documentLabel.textContent = 'CNPJ';
+                documentInput.placeholder = '00.000.000/0000-00';
+                companyNameInput.required = true;
+            } else {
+                juridicaFields.style.display = 'none';
+                nameLabel.textContent = 'Nome Completo';
+                documentLabel.textContent = 'CPF';
+                documentInput.placeholder = '000.000.000-00';
+                companyNameInput.required = false;
+            }
+        }
+
+        // Initialize fields on page load
+        document.addEventListener('DOMContentLoaded', toggleFields);
+    </script>
 </body>
 </html>

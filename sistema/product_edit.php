@@ -16,7 +16,7 @@ if (!$product_id) {
 }
 
 // Buscar dados do produto
-$stmt = $conn->prepare("SELECT name, description, price FROM products WHERE id = ?");
+$stmt = $conn->prepare("SELECT full_name, description, price FROM products WHERE id = ?");
 $stmt->bind_param("i", $product_id);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -52,8 +52,8 @@ $product = $result->fetch_assoc();
             <input type="hidden" name="action" value="update">
             <input type="hidden" name="id" value="<?php echo $product_id; ?>">
             <div class="form-group">
-                <label for="name">Nome do Produto</label>
-                <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($product['name']); ?>" required>
+                <label for="full_name">Nome do Produto</label>
+                <input type="text" id="full_name" name="full_name" value="<?php echo htmlspecialchars($product['full_name']); ?>" required>
             </div>
             <div class="form-group">
                 <label for="description">Descrição</label>

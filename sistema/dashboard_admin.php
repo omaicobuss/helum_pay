@@ -16,7 +16,7 @@ if (isset($_SESSION['feedback'])) {
 }
 
 // Buscar dados e armazenar em arrays
-$users = $conn->query("SELECT id, username, role FROM users ORDER BY id ASC")->fetch_all(MYSQLI_ASSOC);
+$users = $conn->query("SELECT id, username, full_name, email, user_type, document, role FROM users ORDER BY id ASC")->fetch_all(MYSQLI_ASSOC);
 $products = $conn->query("SELECT id, name, description, price FROM products ORDER BY id ASC")->fetch_all(MYSQLI_ASSOC);
 $subscriptions_sql = "
     SELECT s.id, u.username, p.name as product_name, s.next_due_date, s.status, s.notes
@@ -108,18 +108,22 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
         <div id="users" class="tab-content active section">
             <h2>Gerenciar Usuários</h2>
             <table>
-                <thead><tr><th>ID</th><th>Usuário</th><th>Perfil</th><th>Ações</th></tr></thead>
+                <thead><tr><th>ID</th><th>Usuário</th><th>Nome</th><th>E-mail</th><th>Documento</th><th>Perfil</th><th>Ações</th></tr></thead>
                 <tbody>
                     <?php foreach($users as $user): ?>
                     <tr>
                         <form action="update_role.php" method="POST" style="display: contents;">
                             <td><?php echo $user['id']; ?></td>
                             <td><?php echo htmlspecialchars($user['username']); ?></td>
+                            <td><?php echo htmlspecialchars($user['full_name']); ?></td>
+                            <td><?php echo htmlspecialchars($user['email']); ?></td>
+                            <td><?php echo htmlspecialchars($user['document']); ?> (<?php echo htmlspecialchars(strtoupper($user['user_type'])); ?>)</td>
                             <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
                             <td><select name="role"><option value="cliente" <?php echo ($user['role'] == 'cliente') ? 'selected' : ''; ?>>Cliente</option><option value="admin" <?php echo ($user['role'] == 'admin') ? 'selected' : ''; ?>>Admin</option></select></td>
                             <td>
-                                <button type="submit" class="btn-save">Salvar</button>
-                                <button type="button" class="btn-notify" onclick="openEmailModal('<?php echo $user['id']; ?>')">Enviar E-mail</button>
+                                <button type="submit" class="btn-save">Salvar Perfil</button>
+                                <a href="user_edit.php?id=<?php echo $user['id']; ?>" class="btn-edit" style="margin-left: 5px;">Editar Usuário</a>
+                                <button type="button" class="btn-notify" style="margin-left: 5px;" onclick="openEmailModal('<?php echo $user['id']; ?>')">Enviar E-mail</button>
                             </td>
                         </form>
                     </tr>
@@ -157,7 +161,7 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
                     <?php foreach($products as $product): ?>
                     <tr>
                         <td><?php echo $product['id']; ?></td>
-                        <td><?php echo htmlspecialchars($product['name']); ?></td>
+                        <td><?php echo htmlspecialchars($product['full_name']); ?></td>
                         <td>R$ <?php echo number_format($product['price'], 2, ',', '.'); ?></td>
                         <td><a href="product_edit.php?id=<?php echo $product['id']; ?>" class="btn-edit">Editar</a> <a href="handle_product.php?action=delete&id=<?php echo $product['id']; ?>" class="btn-delete" onclick="return confirmDelete();">Excluir</a></td>
                     </tr>
@@ -167,7 +171,7 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
             <h3>Adicionar Novo Produto</h3>
             <form action="handle_product.php" method="POST">
                 <input type="hidden" name="action" value="create">
-                <div class="form-group"><input type="text" name="name" placeholder="Nome do Produto" required></div>
+                <div class="form-group"><input type="text" name="full_name" placeholder="Nome do Produto" required></div>
                 <div class="form-group"><textarea name="description" placeholder="Descrição do Produto" rows="3"></textarea></div>
                 <div class="form-group"><input type="number" step="0.01" name="price" placeholder="Preço (ex: 49.90)" required></div>
                 <button type="submit" class="btn btn-save">Adicionar Produto</button>
@@ -201,7 +205,7 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
                 <input type="hidden" name="action" value="create">
                 <div class="form-grid">
                     <div class="form-group"><label>Usuário</label><select name="user_id" required><?php foreach($users as $user) echo "<option value='{$user['id']}'>".htmlspecialchars($user['username'])."</option>"; ?></select></div>
-                    <div class="form-group"><label>Produto</label><select name="product_id" required><?php foreach($products as $product) echo "<option value='{$product['id']}'>".htmlspecialchars($product['name'])."</option>"; ?></select></div>
+                    <div class="form-group"><label>Produto</label><select name="product_id" required><?php foreach($products as $product) echo "<option value='{$product['id']}'>".htmlspecialchars($product['full_name'])."</option>"; ?></select></div>
                     <div class="form-group"><label>Data de Início</label><input type="date" name="start_date" value="<?php echo date('Y-m-d'); ?>" required></div>
                     <div class="form-group"><label>Próximo Vencimento</label><input type="date" name="next_due_date" value="<?php echo date('Y-m-d', strtotime('+1 month')); ?>" required></div>
                     <div class="form-group"><label>Status</label><select name="status" required><option value="active">Ativa</option><option value="paid">Paga</option><option value="canceled">Cancelada</option></select></div>

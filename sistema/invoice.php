@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['subscription_ids']) &
     $placeholders = implode(',', array_fill(0, count($subscription_ids), '?'));
     
     $sql = "
-        SELECT s.id, s.next_due_date, p.name as product_name, p.price, u.full_name, u.cpf
+        SELECT s.id, s.next_due_date, p.name as product_name, p.price, u.full_name, u.document, u.user_type
         FROM subscriptions s
         JOIN products p ON s.product_id = p.id
         JOIN users u ON s.user_id = u.id
@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['subscription_ids']) &
         $invoice_items[] = $row;
         $total_amount += (float)$row['price'];
         if (!$user_info) {
-            $user_info = ['name' => $row['full_name'], 'cpf' => $row['cpf']];
+            $user_info = ['name' => $row['full_name'], 'document' => $row['document'], 'user_type' => $row['user_type']];
         }
     }
     $subscription_ids_for_form = $subscription_ids;
@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['subscription_ids']) &
 } elseif (isset($_GET['id'])) {
     $subscription_id = (int)$_GET['id'];
     $sql = "
-        SELECT s.id, s.next_due_date, p.name as product_name, p.price, u.full_name, u.cpf
+        SELECT s.id, s.next_due_date, p.full_name as product_name, p.price, u.full_name, u.document, u.user_type
         FROM subscriptions s
         JOIN products p ON s.product_id = p.id
         JOIN users u ON s.user_id = u.id
@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['subscription_ids']) &
     if ($row = $result->fetch_assoc()) {
         $invoice_items[] = $row;
         $total_amount = (float)$row['price'];
-        $user_info = ['name' => $row['full_name'], 'cpf' => $row['cpf']];
+        $user_info = ['name' => $row['full_name'], 'document' => $row['document'], 'user_type' => $row['user_type']];
         $subscription_ids_for_form[] = $subscription_id;
     }
     $stmt->close();
@@ -106,7 +106,7 @@ $conn->close();
             <tr class="information">
                 <td colspan="2">
                     <table>
-                        <tr><td><strong>Cobrança para:</strong><br><?php echo htmlspecialchars($user_info['name']); ?><br>CPF: <?php echo htmlspecialchars($user_info['cpf']); ?></td></tr>
+                        <tr><td><strong>Cobrança para:</strong><br><?php echo htmlspecialchars($user_info['name']); ?><br><?php echo ($user_info['user_type'] === 'juridica' ? 'CNPJ' : 'CPF'); ?>: <?php echo htmlspecialchars($user_info['document']); ?></td></tr>
                     </table>
                 </td>
             </tr>

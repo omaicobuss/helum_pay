@@ -11,13 +11,12 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 $action = $_REQUEST['action'] ?? '';
 
 switch ($action) {
-    case 'create':
-        $name = $_POST['name'] ?? '';
+$name = $_POST['full_name'] ?? '';
         $description = $_POST['description'] ?? '';
         $price = $_POST['price'] ?? 0;
 
         if ($name && $price > 0) {
-            $stmt = $conn->prepare("INSERT INTO products (name, description, price) VALUES (?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO products (full_name, description, price) VALUES (?, ?, ?)");
             $stmt->bind_param("ssd", $name, $description, $price);
             $stmt->execute();
             $_SESSION['product_feedback'] = "Produto adicionado com sucesso!";
@@ -26,12 +25,12 @@ switch ($action) {
 
     case 'update':
         $id = $_POST['id'] ?? 0;
-        $name = $_POST['name'] ?? '';
+        $name = $_POST['full_name'] ?? '';
         $description = $_POST['description'] ?? '';
         $price = $_POST['price'] ?? 0;
 
         if ($id && $name && $price > 0) {
-            $stmt = $conn->prepare("UPDATE products SET name = ?, description = ?, price = ? WHERE id = ?");
+            $stmt = $conn->prepare("UPDATE products SET full_name = ?, description = ?, price = ? WHERE id = ?");
             $stmt->bind_param("ssdi", $name, $description, $price, $id);
             $stmt->execute();
             $_SESSION['product_feedback'] = "Produto atualizado com sucesso!";

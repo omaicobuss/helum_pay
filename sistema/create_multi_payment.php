@@ -15,6 +15,21 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'cliente') {
 }
 
 $user_id = $_SESSION['user_id'];
+
+// Busca dados do usuário para o pagador
+$stmt_user = $conn->prepare("SELECT full_name, email, document, user_type FROM users WHERE id = ?");
+$stmt_user->bind_param("i", $user_id);
+$stmt_user->execute();
+$user_result = $stmt_user->get_result();
+$user = $user_result->fetch_assoc();
+$stmt_user->close();
+
+if (!$user) {
+    $_SESSION['feedback'] = ['type' => 'error', 'message' => 'Usuário pagador não encontrado.'];
+    header("Location: dashboard_cliente.php");
+    exit();
+}
+
 $subscription_ids = $_POST['subscription_ids'] ?? [];
 
 if (empty($subscription_ids)) {
@@ -64,6 +79,17 @@ $stmt->close();
 
 // Cria a preferência de pagamento no Mercado Pago
 try {
+    // Prepara o objeto do pagador (payer)
+    $payer = [
+        "email" => $user['email'],
+        "first_name" => explode(' ', $user['full_name'])[0],
+        "last_name" => strpos($user['full_name'], ' ') ? substr($user['full_name'], strpos($user['full_name'], ' ') + 1) : '',
+        "identification" => [
+            "type" => ($user['user_type'] === 'juridica') ? 'CNPJ' : 'CPF',
+            "number" => preg_replace('/[^0-9]/', '', $user['document']) // Envia apenas números
+        ]
+    ];
+
     $client = new PreferenceClient();
     $preference = $client->create([
         "items" => [
@@ -74,6 +100,7 @@ try {
                 "unit_price" => $total_amount
             ]
         ],
+        "payer" => $payer,
         "back_urls" => [
             "success" => "https://www.helum.com.br/sistemas/helum_pay/sistema/dashboard_cliente.php?payment_status=success",
             "failure" => "https://www.helum.com.br/sistemas/helum_pay/sistema/dashboard_cliente.php?payment_status=failure",
