@@ -32,7 +32,7 @@ try {
     $mail->Host = 'mail.helum.com.br';
     $mail->SMTPAuth = true;
     $mail->Username = 'financeiro@helum.com.br';
-    $mail->Password = 'D3f1n1t1v@';
+    $mail->Password = '****';
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
     $mail->Port = 465;
     $mail->CharSet = 'UTF-8';
