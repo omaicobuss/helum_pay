@@ -17,8 +17,8 @@ if (MP_MODE === 'production') {
     // --- CREDENCIAIS DE PRODUÇÃO ---
     // Substitua pelos seus valores reais de produção
     $mp_credentials = [
-        'access_token'   => '****',
-        'webhook_secret' => '****'
+        'access_token'   => 'APP_USR-6349447027996217-100317-5a641c93fd1fd8cde8f42c2bda8b7d6d-47137674',
+        'webhook_secret' => 'bd8192740881ea1c037d3310b0e93aa0604b01f124e843ef8d511d41161ddef9'
     ];
 } else {
     // --- CREDENCIAIS DE TESTE (SANDBOX) ---
