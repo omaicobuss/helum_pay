@@ -29,17 +29,17 @@ $mail = new PHPMailer(true);
 try {
     // --- CONFIGURAÇÃO DO SERVIDOR DE E-MAIL (SMTP) ---
     $mail->isSMTP();
-    $mail->Host = 'mail.helum.com.br';
+    $mail->Host = $smtp_config['host'];
     $mail->SMTPAuth = true;
-    $mail->Username = 'financeiro@helum.com.br';
-    $mail->Password = 'D3f1n1t1v@';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-    $mail->Port = 465;
+    $mail->Username = $smtp_config['username'];
+    $mail->Password = $smtp_config['password'];
+    $mail->SMTPSecure = $smtp_config['smtp_secure'];
+    $mail->Port = $smtp_config['port'];
     $mail->CharSet = 'UTF-8';
 
     // Remetente
-    $mail->setFrom('financeiro@helum.com.br', 'Helum Pay');
-    $mail->addBCC('financeiro@helum.com.br');
+    $mail->setFrom($smtp_config['username'], 'Helum Pay');
+    $mail->addBCC($smtp_config['username']);
 
     $email_sent = false;
 

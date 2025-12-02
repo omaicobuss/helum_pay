@@ -1,10 +1,10 @@
 <?php
 // Caminho para o arquivo de configuração
-$config_path = __DIR__ . '/db_config.php';
+$config_path = __DIR__ . '/config.php';
 
 // Verifica se o arquivo de configuração existe
 if (!file_exists($config_path)) {
-    die("Erro crítico: O arquivo de configuração 'db_config.php' não foi encontrado. Por favor, crie-o a partir de 'db_config.example.php'.");
+    die("Erro crítico: O arquivo de configuração 'config.php' não foi encontrado. Por favor, crie-o a partir de 'config.example.php'.");
 }
 
 // Carrega as configurações do banco de dados

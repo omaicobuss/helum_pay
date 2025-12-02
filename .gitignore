@@ -25,4 +25,4 @@
 /vendors/*
 
 # Helum Pay Specific
-sistema/db_config.php
+sistema/config.php

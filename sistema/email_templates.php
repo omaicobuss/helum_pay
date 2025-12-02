@@ -132,4 +132,26 @@ function getPasswordResetEmailBody($username, $reset_link) {
     ';
 }
 
+function getLoginCodeEmailBody($code) {
+    $logo_url = 'https://helum.com.br/sistemas/helum_pay/sistema/logo.png';
+
+    return '
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <img src="' . $logo_url . '" alt="Logo Helum" style="max-width: 150px;">
+            </div>
+            <h2>Seu Código de Acesso Único - Helum Pay</h2>
+            <p>Olá,</p>
+            <p>Use o código abaixo para fazer login em sua conta. Este código é válido por 15 minutos.</p>
+            <p style="text-align: center; font-size: 24px; letter-spacing: 5px; margin: 30px 0; font-weight: bold;">
+                ' . htmlspecialchars($code) . '
+            </p>
+            <p>Se você não solicitou este código, por favor, ignore este e-mail.</p>
+            <br>
+            <p>Atenciosamente,</p>
+            <p><strong>Equipe Helum</strong></p>
+        </div>
+    ';
+}
+
 ?>
