@@ -171,7 +171,7 @@ function getNewLoginMethodEmailBody($fullName) {
 
             <h3>Como funciona o login com código:</h3>
             <ol style="padding-left: 20px;">
-                <li>Acesse nossa página de login e clique na opção <strong>"Entrar com código"</strong>.</li>
+                <li>Acesse nossa página de login e clique na opção <strong>"Acessar com um código único no seu e-mail"</strong>.</li>
                 <li>Digite o seu endereço de e-mail de cadastro.</li>
                 <li>Você receberá um e-mail com um código de acesso exclusivo.</li>
                 <li>Insira esse código na tela de login para acessar sua conta.</li>

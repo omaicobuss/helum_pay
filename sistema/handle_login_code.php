@@ -8,16 +8,20 @@ require 'db.php';
 require '_mp/vendor/autoload.php';
 require 'email_templates.php';
 
+require 'config.php';
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $email = $_POST['email'];
 
     // Verificar se o e-mail existe na base de dados
-    $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+    $stmt = $conn->prepare("SELECT id, full_name FROM users WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $result = $stmt->get_result();
 
     if ($result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+
         // Gerar código único
         $code = substr(str_shuffle("0123456789abcdefghijklmnopqrstuvwxyz"), 0, 6);
         $expires_at = date('Y-m-d H:i:s', strtotime('+15 minutes'));
@@ -30,19 +34,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // Enviar e-mail com o código
         $mail = new PHPMailer(true);
         try {
-            // Configurações do servidor
+            // Configurações do servidor a partir de config.php
             $mail->isSMTP();
-            $mail->Host = 'mail.helum.com.br';
+            $mail->Host = $smtp_config['host'];
             $mail->SMTPAuth = true;
-            $mail->Username = 'financeiro@helum.com.br';
-            $mail->Password = 'D3f1n1t1v@';
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-            $mail->Port = 465;
+            $mail->Username = $smtp_config['username'];
+            $mail->Password = $smtp_config['password'];
+            $mail->SMTPSecure = $smtp_config['smtp_secure'];
+            $mail->Port = $smtp_config['port'];
             $mail->CharSet = 'UTF-8';
 
             // Remetente e destinatário
-            $mail->setFrom('financeiro@helum.com.br', 'Helum Pay');
-            $mail->addAddress($email);
+            $mail->setFrom($smtp_config['username'], 'Helum Pay');
+            $mail->addAddress($email, $user['full_name'] ?? '');
 
             // Conteúdo
             $mail->isHTML(true);
@@ -56,7 +60,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             exit();
 
         } catch (Exception $e) {
-            $_SESSION['error_message'] = "Erro ao enviar o e-mail: {$mail->ErrorInfo}";
+            // Log do erro para depuração em vez de expor ao usuário
+            error_log("Erro ao enviar e-mail de código de login: " . $mail->ErrorInfo);
+            $_SESSION['error_message'] = "Ocorreu um erro ao enviar o código de acesso. Por favor, tente novamente.";
             header("Location: login_code.php");
             exit();
         }

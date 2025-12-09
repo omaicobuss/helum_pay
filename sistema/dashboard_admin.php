@@ -1,23 +1,23 @@
 <?php
 session_start();
-require 'db.php';
+require_once 'db.php';
 
-// Proteção: Apenas administradores
+// Proteção de Rota: Apenas administradores podem acessar.
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
     exit();
 }
 
-// Mensagens de feedback da sessão
-$feedback_message = '';
-if (isset($_SESSION['feedback'])) {
-    $feedback_message = '<div class="success-message">' . $_SESSION['feedback'] . '</div>';
-    unset($_SESSION['feedback']);
-}
+// --- Recuperação de Dados ---
+// Centraliza a busca de dados no início do script.
 
-// Buscar dados e armazenar em arrays
+// Busca todos os usuários
 $users = $conn->query("SELECT id, username, full_name, email, user_type, document, role FROM users ORDER BY id ASC")->fetch_all(MYSQLI_ASSOC);
+
+// Busca todos os produtos
 $products = $conn->query("SELECT id, name, description, price FROM products ORDER BY id ASC")->fetch_all(MYSQLI_ASSOC);
+
+// Busca todas as assinaturas com detalhes do usuário e produto
 $subscriptions_sql = "
     SELECT s.id, u.username, p.name as product_name, s.next_due_date, s.status, s.notes
     FROM subscriptions s
@@ -25,18 +25,16 @@ $subscriptions_sql = "
     JOIN products p ON s.product_id = p.id
     ORDER BY s.id ASC";
 $subscriptions = $conn->query($subscriptions_sql)->fetch_all(MYSQLI_ASSOC);
+
+// Busca os últimos 20 logs de webhook
 $webhook_logs_sql = "
     SELECT id, received_at, processing_status, headers, query_params, body 
     FROM webhook_logs ORDER BY id DESC LIMIT 20";
 $webhook_logs = $conn->query($webhook_logs_sql)->fetch_all(MYSQLI_ASSOC);
+
+// Busca todos os pagamentos com detalhes
 $payments_sql = "
-    SELECT
-        pay.id,
-        pay.payment_date,
-        pay.amount,
-        pay.status,
-        u.username,
-        p.name as product_name
+    SELECT pay.id, pay.payment_date, pay.amount, pay.status, u.username, p.name as product_name
     FROM payments pay
     JOIN subscriptions s ON pay.subscription_id = s.id
     JOIN users u ON s.user_id = u.id
@@ -44,6 +42,12 @@ $payments_sql = "
     ORDER BY pay.id DESC";
 $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
 
+// Mensagem de feedback (ex: após uma operação)
+$feedback_message = '';
+if (isset($_SESSION['feedback'])) {
+    $feedback_message = '<div class="success-message">' . htmlspecialchars($_SESSION['feedback']) . '</div>';
+    unset($_SESSION['feedback']);
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -54,6 +58,13 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* 
+         * Nota de Refatoração:
+         * Estes estilos são específicos para esta página. Para melhor manutenção,
+         * eles poderiam ser movidos para um arquivo CSS separado, como 'dashboard_styles.css',
+         * e incluídos no <head>. Por enquanto, foram mantidos aqui para garantir
+         * que o layout não seja quebrado.
+         */
         body { font-family: 'Inter', sans-serif; align-items: flex-start; padding-top: 20px; padding-bottom: 40px; background-color: #0d1117; color: #c9d1d9; }
         .dashboard-container { width: 100%; max-width: 1200px; margin: 0 auto; background: none; box-shadow: none; padding: 0;}
         .section { background-color: #161b22; border: 1px solid #30363d; padding: 30px; border-radius: 10px; }
@@ -93,7 +104,11 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
 </head>
 <body>
     <div class="dashboard-container">
-        <div class="dashboard-header"><h1>Painel do Administrador</h1><a href="logout.php">Sair</a></div>
+        <div class="dashboard-header">
+            <h1>Painel do Administrador</h1>
+            <a href="logout.php">Sair</a>
+        </div>
+
         <?php echo $feedback_message; ?>
 
         <div class="tabs">
@@ -104,318 +119,24 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
             <button class="tab-link" onclick="openTab(event, 'logs')">Logs de Webhook</button>
         </div>
 
-        <!-- Aba de Usuários -->
-        <div id="users" class="tab-content active section">
-            <h2>Gerenciar Usuários</h2>
-            <table>
-                <thead><tr><th>ID</th><th>Usuário</th><th>Nome</th><th>E-mail</th><th>Documento</th><th>Perfil</th><th>Ações</th></tr></thead>
-                <tbody>
-                    <?php foreach($users as $user): ?>
-                    <tr>
-                        <form action="update_role.php" method="POST" style="display: contents;">
-                            <td><?php echo $user['id']; ?></td>
-                            <td><?php echo htmlspecialchars($user['username']); ?></td>
-                            <td><?php echo htmlspecialchars($user['full_name']); ?></td>
-                            <td><?php echo htmlspecialchars($user['email']); ?></td>
-                            <td><?php echo htmlspecialchars($user['document']); ?> (<?php echo htmlspecialchars(strtoupper($user['user_type'])); ?>)</td>
-                            <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
-                            <td><select name="role"><option value="cliente" <?php echo ($user['role'] == 'cliente') ? 'selected' : ''; ?>>Cliente</option><option value="admin" <?php echo ($user['role'] == 'admin') ? 'selected' : ''; ?>>Admin</option></select></td>
-                            <td>
-                                <button type="submit" class="btn-save">Salvar Perfil</button>
-                                <a href="user_edit.php?id=<?php echo $user['id']; ?>" class="btn-edit" style="margin-left: 5px;">Editar Usuário</a>
-                                <button type="button" class="btn-notify" style="margin-left: 5px;" onclick="openEmailModal('<?php echo $user['id']; ?>')">Enviar E-mail</button>
-                            </td>
-                        </form>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Modal de Envio de E-mail -->
-        <div id="emailModal" class="modal">
-            <div class="modal-content">
-                <span class="close-button" onclick="closeEmailModal()">&times;</span>
-                <h3>Enviar E-mail para Usuário</h3>
-                <form action="handle_email.php" method="GET">
-                    <input type="hidden" name="action" value="send_custom">
-                    <input type="hidden" id="modalUserId" name="id" value="">
-                    <div class="form-group">
-                        <label for="template">Modelo de E-mail:</label>
-                        <select id="template" name="template" class="form-control" required>
-                            <option value="new_system_welcome">Boas-vindas ao Novo Sistema</option>
-                            <option value="new_login_method">Novo Método de Login</option>
-                            <!-- Outros templates podem ser adicionados aqui -->
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-save">Enviar</button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Aba de Produtos -->
-        <div id="products" class="tab-content section">
-            <h2>Gerenciar Produtos</h2>
-            <table>
-                <thead><tr><th>ID</th><th>Nome</th><th>Preço</th><th>Ações</th></tr></thead>
-                <tbody>
-                    <?php foreach($products as $product): ?>
-                    <tr>
-                        <td><?php echo $product['id']; ?></td>
-                        <td><?php echo htmlspecialchars($product['full_name']); ?></td>
-                        <td>R$ <?php echo number_format($product['price'], 2, ',', '.'); ?></td>
-                        <td><a href="product_edit.php?id=<?php echo $product['id']; ?>" class="btn-edit">Editar</a> <a href="handle_product.php?action=delete&id=<?php echo $product['id']; ?>" class="btn-delete" onclick="return confirmDelete();">Excluir</a></td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-            <h3>Adicionar Novo Produto</h3>
-            <form action="handle_product.php" method="POST">
-                <input type="hidden" name="action" value="create">
-                <div class="form-group"><input type="text" name="full_name" placeholder="Nome do Produto" required></div>
-                <div class="form-group"><textarea name="description" placeholder="Descrição do Produto" rows="3"></textarea></div>
-                <div class="form-group"><input type="number" step="0.01" name="price" placeholder="Preço (ex: 49.90)" required></div>
-                <button type="submit" class="btn btn-save">Adicionar Produto</button>
-            </form>
-        </div>
-
-        <!-- Aba de Assinaturas -->
-        <div id="subscriptions" class="tab-content section">
-            <h2>Gerenciar Assinaturas</h2>
-            <table>
-                <thead><tr><th>ID</th><th>Usuário</th><th>Produto</th><th>Próx. Vencimento</th><th>Status</th><th>Notas</th><th>Ações</th></tr></thead>
-                <tbody>
-                    <?php foreach($subscriptions as $sub): ?>
-                    <tr>
-                        <td><?php echo $sub['id']; ?></td>
-                        <td><?php echo htmlspecialchars($sub['username']); ?></td>
-                        <td><?php echo htmlspecialchars($sub['product_name']); ?></td>
-                        <td><?php echo date("d/m/Y", strtotime($sub['next_due_date'])); ?></td>
-                        <td><?php echo htmlspecialchars($sub['status']); ?></td>
-                        <td style="white-space: pre-wrap;"><?php echo htmlspecialchars($sub['notes']); ?></td>
-                        <td>
-                            <button type="button" class="btn-notify" onclick="openSubscriptionEmailModal('<?php echo $sub['id']; ?>')">Notificar</button>
-                            <a href="subscription_edit.php?id=<?php echo $sub['id']; ?>" class="btn-edit">Editar</a> 
-                            <a href="handle_subscription.php?action=delete&id=<?php echo $sub['id']; ?>" class="btn-delete" onclick="return confirmDelete();">Excluir</a></td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-            <h3>Adicionar Nova Assinatura</h3>
-            <form action="handle_subscription.php" method="POST">
-                <input type="hidden" name="action" value="create">
-                <div class="form-grid">
-                    <div class="form-group"><label>Usuário</label><select name="user_id" required><?php foreach($users as $user) echo "<option value='{$user['id']}'>".htmlspecialchars($user['username'])."</option>"; ?></select></div>
-                    <div class="form-group"><label>Produto</label><select name="product_id" required><?php foreach($products as $product) echo "<option value='{$product['id']}'>".htmlspecialchars($product['full_name'])."</option>"; ?></select></div>
-                    <div class="form-group"><label>Data de Início</label><input type="date" name="start_date" value="<?php echo date('Y-m-d'); ?>" required></div>
-                    <div class="form-group"><label>Próximo Vencimento</label><input type="date" name="next_due_date" value="<?php echo date('Y-m-d', strtotime('+1 month')); ?>" required></div>
-                    <div class="form-group"><label>Status</label><select name="status" required><option value="active">Ativa</option><option value="paid">Paga</option><option value="canceled">Cancelada</option></select></div>
-                </div>
-                <div class="form-group">
-                    <label>Notas Complementares</label>
-                    <textarea name="notes" rows="3"></textarea>
-                </div>
-                <button type="submit" class="btn btn-save">Adicionar Assinatura</button>
-            </form>
-        </div>
-
-        <!-- Modal de E-mail de Assinatura -->
-        <div id="subscriptionEmailModal" class="modal">
-            <div class="modal-content">
-                <span class="close-button" onclick="closeSubscriptionEmailModal()">&times;</span>
-                <h3>Notificar Assinatura</h3>
-                <form action="handle_email.php" method="GET">
-                    <input type="hidden" name="action" value="notify_subscription">
-                    <input type="hidden" id="modalSubscriptionId" name="id" value="">
-                    <div class="form-group">
-                        <label for="sub_template">Modelo de E-mail:</label>
-                        <select id="sub_template" name="template" class="form-control" required>
-                            <option value="invoice_available">Fatura Disponível</option>
-                            <option value="invoice_due">Lembrete de Vencimento</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-save">Enviar Notificação</button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Aba de Pagamentos -->
-        <div id="payments" class="tab-content section">
-            <h2>Gerenciar Pagamentos</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Usuário</th>
-                        <th>Produto</th>
-                        <th>Data</th>
-                        <th>Valor</th>
-                        <th>Status</th>
-                        <th>Ação</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach($payments as $payment): ?>
-                    <tr>
-                        <form action="handle_payment.php" method="POST" style="display: contents;">
-                            <input type="hidden" name="action" value="update_status">
-                            <input type="hidden" name="payment_id" value="<?php echo $payment['id']; ?>">
-                            <td><?php echo $payment['id']; ?></td>
-                            <td><?php echo htmlspecialchars($payment['username']); ?></td>
-                            <td><?php echo htmlspecialchars($payment['product_name']); ?></td>
-                            <td><?php echo $payment['payment_date'] ? date("d/m/Y H:i", strtotime($payment['payment_date'])) : 'N/A'; ?></td>
-                            <td>R$ <?php echo number_format($payment['amount'], 2, ',', '.'); ?></td>
-                            <td><span class="status status-info"><?php echo htmlspecialchars($payment['status']); ?></span></td>
-                            <td>
-                                <select name="new_status" style="width: auto; margin-right: 10px;">
-                                    <option value="<?php echo $payment['status']; ?>" selected><?php echo ucfirst($payment['status']); ?></option>
-                                    <option value="initiated">Iniciado</option><option value="pending">Pendente</option><option value="approved">Aprovado</option><option value="rejected">Rejeitado</option><option value="cancelled">Cancelado</option><option value="refunded">Devolvido</option></select>
-                                <button type="submit" class="btn-save">Salvar</button>
-                                <?php if ($payment['status'] === 'approved'): ?>
-                                    <button type="button" class="btn-notify" style="margin-left: 10px;" onclick="openPaymentEmailModal('<?php echo $payment['id']; ?>')">Confirmar Pagamento</button>
-                                <?php endif; ?>
-                            </td>
-                        </form>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Modal de E-mail de Pagamento -->
-        <div id="paymentEmailModal" class="modal">
-            <div class="modal-content">
-                <span class="close-button" onclick="closePaymentEmailModal()">&times;</span>
-                <h3>Confirmar Pagamento</h3>
-                <form action="handle_email.php" method="GET">
-                    <input type="hidden" name="action" value="confirm_payment">
-                    <input type="hidden" id="modalPaymentId" name="id" value="">
-                    <div class="form-group">
-                        <label for="payment_template">Modelo de E-mail:</label>
-                        <select id="payment_template" name="template" class="form-control" required>
-                            <option value="payment_confirmation">Confirmação de Pagamento</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-save">Enviar Confirmação</button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Aba de Logs de Webhook -->
-        <div id="logs" class="tab-content section">
-            <h2>Logs de Webhook (20 mais recentes) <a href="admin/webhook_logs.php" style="font-size: 14px; float: right;">Ver todos</a></h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Recebido em</th>
-                        <th>Status</th>
-                        <th>Detalhes</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($webhook_logs)): ?>
-                        <tr><td colspan="4" style="text-align: center;">Nenhum log encontrado.</td></tr>
-                    <?php else: ?>
-                        <?php foreach ($webhook_logs as $log): ?>
-                            <tr>
-                                <td><?php echo $log['id']; ?></td>
-                                <td><?php echo date('d/m/Y H:i:s', strtotime($log['received_at'])); ?></td>
-                                <td>
-                                    <?php
-                                    $status = $log['processing_status'] ?? 'PENDING';
-                                    $class = 'status-info';
-                                    if (strpos($status, 'SUCCESS') !== false) $class = 'status-success';
-                                    if (strpos($status, 'FAIL') !== false || strpos($status, 'ERROR') !== false) $class = 'status-failure';
-                                    if (strpos($status, 'PENDING') !== false || strpos($status, 'VALID') !== false) $class = 'status-pending';
-                                    ?>
-                                    <span class="status <?php echo $class; ?>"><?php echo htmlspecialchars($status); ?></span>
-                                </td>
-                                <td>
-                                    <span class="details-toggle" onclick="toggleDetails('details-log-<?php echo $log['id']; ?>')">Mostrar/Ocultar</span>
-                                </td>
-                            </tr>
-                            <tr class="details-row">
-                                <td colspan="4">
-                                    <div id="details-log-<?php echo $log['id']; ?>" class="details-content">
-                                        <strong>Cabeçalhos (Headers):</strong>
-                                        <pre><?php echo htmlspecialchars(json_encode(json_decode($log['headers']), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre>
-                                        <hr>
-                                        <strong>Parâmetros da URL (Query Params):</strong>
-                                        <pre><?php echo htmlspecialchars(json_encode(json_decode($log['query_params']), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre>
-                                        <hr>
-                                        <strong>Corpo (Body):</strong>
-                                        <pre><?php echo htmlspecialchars(json_encode(json_decode($log['body']), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
+        <!-- Inclusão das Abas -->
+        <?php include '_admin_tabs/users.php'; ?>
+        <?php include '_admin_tabs/products.php'; ?>
+        <?php include '_admin_tabs/subscriptions.php'; ?>
+        <?php include '_admin_tabs/payments.php'; ?>
+        <?php include '_admin_tabs/logs.php'; ?>
     </div>
-    <script>
-        function openTab(evt, tabName) {
-            var i, tabcontent, tablinks;
-            tabcontent = document.getElementsByClassName("tab-content");
-            for (i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].style.display = "none";
-                tabcontent[i].classList.remove("active");
-            }
-            tablinks = document.getElementsByClassName("tab-link");
-            for (i = 0; i < tablinks.length; i++) {
-                tablinks[i].classList.remove("active");
-            }
-            document.getElementById(tabName).style.display = "block";
-            document.getElementById(tabName).classList.add("active");
-            evt.currentTarget.classList.add("active");
-        }
-        document.querySelector('.tab-link.active').click(); // Abre a primeira aba por padrão
 
-        function toggleDetails(id) {
-            const element = document.getElementById(id);
-            element.style.display = (element.style.display === 'block') ? 'none' : 'block';
-        }
-        function confirmDelete() { return confirm('Você tem certeza que deseja excluir este item?'); }
+    <!-- Inclusão dos Modais -->
+    <?php include '_admin_modals/email_modal.php'; ?>
+    <?php include '_admin_modals/subscription_email_modal.php'; ?>
+    <?php include '_admin_modals/payment_email_modal.php'; ?>
 
-        // Funções do Modal de E-mail de Usuário
-        const emailModal = document.getElementById('emailModal');
-        function openEmailModal(userId) {
-            document.getElementById('modalUserId').value = userId;
-            emailModal.style.display = 'block';
-        }
-        function closeEmailModal() {
-            emailModal.style.display = 'none';
-        }
-
-        // Funções do Modal de E-mail de Assinatura
-        const subscriptionEmailModal = document.getElementById('subscriptionEmailModal');
-        function openSubscriptionEmailModal(subscriptionId) {
-            document.getElementById('modalSubscriptionId').value = subscriptionId;
-            subscriptionEmailModal.style.display = 'block';
-        }
-        function closeSubscriptionEmailModal() {
-            subscriptionEmailModal.style.display = 'none';
-        }
-
-        // Funções do Modal de E-mail de Pagamento
-        const paymentEmailModal = document.getElementById('paymentEmailModal');
-        function openPaymentEmailModal(paymentId) {
-            document.getElementById('modalPaymentId').value = paymentId;
-            paymentEmailModal.style.display = 'block';
-        }
-        function closePaymentEmailModal() {
-            paymentEmailModal.style.display = 'none';
-        }
-
-        // Fechar modais ao clicar fora
-        window.onclick = function(event) {
-            if (event.target == emailModal) closeEmailModal();
-            if (event.target == subscriptionEmailModal) closeSubscriptionEmailModal();
-            if (event.target == paymentEmailModal) closePaymentEmailModal();
-        }
-    </script>
+    <!-- Inclusão do JavaScript -->
+    <script src="js/dashboard_admin.js" defer></script>
 </body>
 </html>
-<?php $conn->close(); ?>
+<?php
+// Fecha a conexão com o banco de dados
+$conn->close();
+?>
