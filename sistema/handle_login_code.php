@@ -26,8 +26,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $code = substr(str_shuffle("0123456789abcdefghijklmnopqrstuvwxyz"), 0, 6);
         $expires_at = date('Y-m-d H:i:s', strtotime('+15 minutes'));
 
-        // Salvar código na base de dados
-        $stmt = $conn->prepare("INSERT INTO login_codes (email, code, expires_at) VALUES (?, ?, ?)");
+        // Salvar código na base de dados (Usa INSERT ... ON DUPLICATE KEY UPDATE para criar ou atualizar)
+        $stmt = $conn->prepare("
+            INSERT INTO login_codes (email, code, expires_at) 
+            VALUES (?, ?, ?) 
+            ON DUPLICATE KEY UPDATE code = VALUES(code), expires_at = VALUES(expires_at)
+        ");
         $stmt->bind_param("sss", $email, $code, $expires_at);
         $stmt->execute();
 
