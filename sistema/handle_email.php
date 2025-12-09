@@ -116,6 +116,15 @@ try {
             $mail->send();
             $email_sent = true;
             $_SESSION['feedback'] = "E-mail enviado com sucesso para {$user['email']}.";
+        } elseif ($user && $template === 'new_login_method') {
+            $mail->addAddress($user['email'], $user['full_name']);
+            $mail->isHTML(true);
+            $mail->Subject = 'Uma nova maneira de acessar sua conta Helum Pay!';
+            $mail->Body    = getNewLoginMethodEmailBody($user['full_name']);
+            
+            $mail->send();
+            $email_sent = true;
+            $_SESSION['feedback'] = "E-mail sobre o novo método de login enviado com sucesso para {$user['email']}.";
         }
     }
 

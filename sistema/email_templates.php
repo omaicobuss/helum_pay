@@ -154,4 +154,41 @@ function getLoginCodeEmailBody($code) {
     ';
 }
 
+function getNewLoginMethodEmailBody($fullName) {
+    $login_url = 'http://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . '/login_code.php';
+    $logo_url = 'https://helum.com.br/sistemas/helum_pay/sistema/logo.png';
+
+    return '
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <img src="' . $logo_url . '" alt="Logo Helum" style="max-width: 150px;">
+            </div>
+            <h2>Uma nova maneira de acessar sua conta Helum Pay!</h2>
+            <p>Olá, ' . htmlspecialchars($fullName) . ',</p>
+            <p>Temos uma ótima notícia! Agora você pode acessar sua conta de forma ainda mais simples e segura, utilizando um <strong>código de uso único</strong> enviado diretamente para o seu e-mail.</p>
+            
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+            <h3>Como funciona o login com código:</h3>
+            <ol style="padding-left: 20px;">
+                <li>Acesse nossa página de login e clique na opção <strong>"Entrar com código"</strong>.</li>
+                <li>Digite o seu endereço de e-mail de cadastro.</li>
+                <li>Você receberá um e-mail com um código de acesso exclusivo.</li>
+                <li>Insira esse código na tela de login para acessar sua conta.</li>
+            </ol>
+            
+            <p>É rápido, fácil e seguro!</p>
+
+            <p>Convidamos você a experimentar esta nova funcionalidade hoje mesmo.</p>
+            <p style="text-align: center;">
+                <a href="' . $login_url . '" style="background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block;">Testar Agora</a>
+            </p>
+
+            <br>
+            <p>Atenciosamente,</p>
+            <p><strong>Equipe Helum</strong></p>
+        </div>
+    ';
+}
+
 ?>

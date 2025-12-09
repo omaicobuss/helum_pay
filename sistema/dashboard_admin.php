@@ -144,6 +144,7 @@ $payments = $conn->query($payments_sql)->fetch_all(MYSQLI_ASSOC);
                         <label for="template">Modelo de E-mail:</label>
                         <select id="template" name="template" class="form-control" required>
                             <option value="new_system_welcome">Boas-vindas ao Novo Sistema</option>
+                            <option value="new_login_method">Novo Método de Login</option>
                             <!-- Outros templates podem ser adicionados aqui -->
                         </select>
                     </div>
